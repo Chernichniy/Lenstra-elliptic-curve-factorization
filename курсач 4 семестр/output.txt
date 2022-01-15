@@ -1,0 +1,676 @@
+#include <iostream>;
+#include <fstream>;
+#include <math.h>;
+#include <string>;
+#include <time.h>;
+#include <windows.h>;
+#include “BigNumber.h”;
+using namespace std;
+const int N1 = 303;
+bool FLAG1 = false;
+BigNumber x11;
+BigNumber y11;
+int* Prime_fill(int* a)
+{
+	ifstream count(“tableofprimes.txt”);
+	for (int i = 0; !count.eof(); i++)
+	{
+		count >> a[i];
+	}
+	count.close();
+	return a;
+}
+int* transfer(int k) //перевод из 10чной в 2чную
+{
+	int n = 64, itr;
+	int* a = new int[n];
+	for (int i = 0; i < 64; i++)
+	{
+		if (k % 2 == 1)
+			a[i] = 1;
+		else
+			a[i] = 0;
+		k = k / 2;
+		if (k == 0)
+		{
+			itr = i;
+			break;
+		}
+	}
+	return a;
+}
+BigNumber GCD(BigNumber a, BigNumber p) //вычисление НОД(a,p)
+{
+	if (p == 0)
+		return a;
+	return GCD(p, a % p);
+}
+BigNumber GCD_EX(BigNumber a, BigNumber p, BigNumber& x, BigNumber& y) //расширенный
+алгоритм Евклида
+{
+	if (a == 0)
+	{
+		x = BigNumber(1);
+		x = x.Assign(0);
+		y = BigNumber(1);
+		y = y.Assign(1);
+		return p;
+	}
+	BigNumber x1, y1;
+	BigNumber d = GCD_EX(p % a, a, x1, y1);
+	x = y1 –(p / a) * x1;
+	y = x1;
+	return d;
+}
+BigNumber mul_inv(BigNumber a, BigNumber m) //вычисление обратного элемента
+{
+	BigNumber tmp = BigNumber(1);
+	tmp = tmp.Assign(1);
+	BigNumber x, y;
+	BigNumber g = GCD_EX(a, m, x, y);
+	if (g != tmp)
+	{
+		FLAG1 = true;
+		return g;
+	}
+	x = (x % m + m) % m;
+	bool i = a.isNeg();
+	if (i == true)
+		x.makeNeg();
+	return x;
+}
+BigNumber Generate_p(int length) //генерация случайного p
+{
+	BigNumber p;
+	p = p.Random_Fill_Prime(length);
+	return p;
+}
+void Generate_b_m(BigNumber& p, int& b, BigNumber& m) //разложение p
+{
+	BigNumber t = p.Decr(1);
+	b = 0;
+	m = p.Decr(1);
+	do
+	{
+		t = t / 2;
+		m = m – t;
+		b++;
+	} while (t % 2 == 0);
+}
+BigNumber Fast_powmod(BigNumber a, BigNumber m, BigNumber p) //быстрое возведение в степень
+по модулю
+{
+	BigNumber result(1);
+	result = result.Assign(1);
+	while (m != 0)
+	{
+		if (m % 2 == 0)
+		{
+			m = m / 2;
+			a = a * a;
+			a = a % p;
+		}
+		else
+		{
+			m = m.Decr(1);
+			result = result * a;
+			result = result % p;
+		}
+	}
+	return result % p;
+}
+bool Rabin_Miller_test(BigNumber m, int b, BigNumber p) //тест Рабина-Миллера
+{
+	BigNumber a;
+	BigNumber z;
+	a = a.Random_Fill_Witness(96);
+	cout << “a = ”;
+	a.output();
+	cout << “\n”;
+	z = Fast_powmod(a, m, p);
+	if (z == 1 || z == p.Decr(1))
+	{
+		cout << “p may be prime\n”;
+		return true;
+	}
+	for (int j = 0; j <= b; )
+	{
+		if (j > 0 && z == 1)
+		{
+			cout << “p is composite\n”;
+			return false;
+		}
+		j++;
+		if (j < b && z != p.Decr(1))
+		{
+			z = z.sqr() % p;
+			if (z == 1)
+			{
+				cout << “p is composite\n”;
+				return false;
+			}
+		}
+		if (z == p.Decr(1))
+		{
+			cout << “p may be prime\n”;
+			return true;
+		}
+		if (j == b && z != p.Decr(1))
+		{
+			cout << “p is composite\n”;
+			return false;
+		}
+	}
+}
+struct point //точка
+{
+	BigNumber x;
+	BigNumber y;
+	bool inf_flag = 0;
+};
+struct elliptic_curve //кривая
+{
+	BigNumber a = 0;
+	BigNumber b = 0;
+	BigNumber m = 0;
+};
+bool equal(struct point* p, struct point* q) //равенство точек
+{
+	if (p->x == q->x && p->y == q->y && p->inf_flag == q->inf_flag)
+		return true;
+	else
+		return false;
+}
+bool point_in(struct point* p, struct elliptic_curve* curve) //принадлежность точки кривой
+{
+	BigNumber s1 = p->y * p->y % curve->m;
+	BigNumber s2 = (p->x * p->x * p->x + curve->a * p->x + curve->b) % curve->m;
+	if (s1 == s2)
+		return true;
+	else
+		return false;
+}
+void point_copy(struct point* to, struct point* from) //копирование точки
+{
+	if (equal(to, from))
+		return;
+	if (to->inf_flag && from->inf_flag)
+		return;
+	to->x = from->x;
+	to->y = from->y;
+	to->inf_flag = from->inf_flag;
+}
+void make_point(struct point* p, BigNumber x, BigNumber y, bool flag) //создание точки
+{
+	p->x = x;
+	p->y = y;
+	p->inf_flag = flag;
+}
+void make_curve(struct elliptic_curve* c, BigNumber a, BigNumber b, BigNumber m) //создание
+кривой
+{
+	c->a = a;
+	c->b = b;
+	c->m = m;
+}
+BigNumber point_add(struct point* s, struct point* p, struct point* q, struct
+	elliptic_curve* curve) //сложение точек
+{
+	struct point rslt;
+	BigNumber lambda;
+	struct point* tp;
+	BigNumber t;
+	if(p -> inf_flag)
+	{
+		tp = p;
+		p = q;
+		q = tp;
+	}
+	if(q -> inf_flag)
+	{
+		point_copy(s, p);
+		return 0;
+	}
+	if ((p != q) && (p -> x == q -> x))
+		if(p->y != q->y)
+		{
+			rslt.x=(p->y + q ->y) % curve ->m;
+			if (rslt.x == 0) {
+				s->inf_flag = 1;
+				cout << “Beskonechnaya tochka\n”;
+				return 0;
+			}
+		}
+	if (equal(p,q))
+	{
+		t=(p->y* 2)% curve->m;
+		lambda=
+			(p->x*p->x* 3+ curve->a)% curve->m;
+	}
+	else {
+		t=(q->x–p->x)% curve->m;
+		lambda=(q->y–p->y)% curve->m;
+	}
+	bool tn = t.isNeg();
+	if (tn == true
+		)
+		t
+		= t
+		+ curve
+		->m;
+	t
+		= mul_inv(t, curve
+			->m);
+	if (FLAG1 == true
+		)
+	{
+		t.output();
+		cout <<
+			“ is a factor of
+			“
+			;
+		curve
+			->m.output();
+		cout <<
+			“
+			\
+			n
+			”
+			;
+		FLAG1 = false
+			;
+		return t;
+	}
+	lambda
+		= (lambda
+			* t)
+		% curve
+		->m;
+	BigNumber tmp = BigNumber(1);
+	tmp
+		= tmp.Assign(1);
+	rslt.x
+		= (lambda
+			* lambda
+			–
+			p
+			->x
+			–
+			q
+			->x)
+		% curve
+		->m;
+	if (rslt.x
+		>
+		(curve
+			->m
+			/ 2)
+		+ tmp)
+	{
+		bool xn = rslt.x.isNeg();
+		if (xn == true
+			)
+		{
+			rslt.x
+				= rslt.x
+				+ curve
+				->m;
+		}
+		else if (xn == false
+			)
+			rslt.x
+			= rslt.x
+			– curve
+			->m;
+	}
+	rslt.y
+		= (lambda
+			*
+			(
+				p
+				->x
+				– rslt.x)
+			–
+			p
+			->y)
+		% curve
+		->m;
+	if (rslt.y
+> curve
+->m
+/ 2)
+	{
+		bool yn = rslt.y.isNeg();
+		if (yn == true
+			)
+			rslt.y = rslt.y + curve->m;
+		else if (yn == false)
+			rslt.y = rslt.y – curve->m;
+	}
+	rslt.inf_flag = 0;
+	point_copy(s, &rslt);
+	return BigNumber(1);
+}
+BigNumber point_double(struct point* s, struct point* p, struct elliptic_curve* curve)
+//удвоение точки
+{
+	BigNumber d = BigNumber(1);
+	d = point_add(s, p, p, curve);
+	return d;
+}
+BigNumber double_and_add(struct point* s, struct point* p, int k, struct elliptic_curve*
+	curve) //умножение “лесенкой”
+{
+	BigNumber tmp = BigNumber(1);
+	tmp = tmp.Assign(1);
+	BigNumber d = BigNumber(1);
+	BigNumber qx = BigNumber(1), qy = BigNumber(1);
+	point* q = new point;
+	point_copy(s, p);
+	make_point(q, qx, qy, true);
+	int* a;
+	a = transfer(k);
+	for (int i = 0; a[i] == 0 || a[i] == 1; i++)
+	{
+		if (a[i] == 1)
+		{
+			d = point_add(q, s, q, curve);
+			if (q->inf_flag)
+				return tmp;
+			if (d != BigNumber(1) && !d.isEmpty())
+				return d;
+		}
+		d = point_double(s, s, curve);
+		if (d != BigNumber(1) && !d.isEmpty())
+			return d;
+		if (s->inf_flag)
+			return tmp;
+	}
+	return BigNumber(1);
+}
+BigNumber ECF_1(BigNumber n, int B1, int* arr, struct point* p, struct elliptic_curve*
+	curve) //первая стадия МФЭК
+{
+	BigNumber u(n);
+	BigNumber del, m;
+	int b1;
+	unsigned long long prime;
+	point* s = new point;
+	point_copy(s, p);
+	for (int i = 0; arr[i] < 100; i++)
+	{
+		cout << arr[i] << “\n”;
+		prime = arr[i];
+		for (int r = 1; prime < B1; r++)
+		{
+			if (r == 1)
+				del = double_and_add(s, s, prime, curve);
+			else
+			{
+				prime = prime * arr[i];
+				del
+					= double_and_add(s, s, prime, curve);
+			}
+			if (del != BigNumber(1)) {
+				u
+					= u
+					/ del;
+				Generate_b_m(u, b1, m);
+				if (Rabin_Miller_test(m, b1, u) == true
+					)
+				{
+					cout <<
+						“That
+						’s all!
+						\
+						n
+						”
+						;
+					x11
+						=
+						s
+						->x;
+					y11
+						=
+						s
+						->y;
+					return u;
+				}
+				curve
+					->m
+					= u;
+			}
+		}
+	}
+	if (del.isEmpty() == true || !(del != BigNumber(1))) {
+		cout <<
+			“Failed
+			\
+			n
+			”
+			;
+		x11
+			=
+			s
+			->x;
+		y11
+			=
+			s
+			->y;
+		return u;
+	}
+	x11
+		=
+		s
+		->x;
+	y11
+		=
+		s
+		->y;
+	return u;
+}
+BigNumber ECF_2(BigNumber
+	n, struct elliptic_curve* curve
+)
+{
+	cout <<
+		“second stage starts here
+		\
+		n
+		”
+		;
+	BigNumber u(
+		n);
+	BigNumber tmp = BigNumber(1);
+	tmp
+		= tmp.Assign(1);
+	BigNumber del, m;
+	int b1;
+	point* s = new point
+		;
+	point* frst = new point
+		;
+	make_point(frst, x11, y11, false);
+	point_copy(s, frst);
+	for
+		(int prime = 100003; prime < 1000000000;)
+	{
+		cout << prime <<
+			“
+			\
+			n
+			”
+			;
+		del
+			= double_and_add(s, frst, prime, curve);
+		if (del != BigNumber(1)) {
+			u
+				= u
+				/ del;
+			Generate_b_m(u, b1, m);
+			if (Rabin_Miller_test(m, b1, u) == true
+				)
+			{
+				cout <<
+					“That
+					’s all!
+					\
+					n
+					”
+					;
+				return u;
+			}
+			curve
+				->m
+				= u;
+			if (u == tmp)
+				return u;
+		}
+		if (del == tmp) {
+			return u;
+		}
+		prime += 10000000;
+	}
+
+	if (del.isEmpty() == true
+		)
+		cout <<
+		“Failed
+		\
+		n
+		”
+		;
+	return u;
+}
+int main() //главная функция {
+BigNumber n, x, y, a, b;
+BigNumber m;
+BigNumber tmp = BigNumber(1);
+tmp
+= tmp.Assign(1);
+DWORD t1, t2, t3, t4;
+int b1;
+int* arr = new int[N1];
+arr = Prime_fill(arr);
+int sz = 0;
+cout <<
+“size ?
+\
+n
+”
+;
+cin >> sz;
+srand((unsigned)time(NULL));
+n
+= Generate_p(sz);
+Generate_b_m(n, b1, m);
+while (Rabin_Miller_test(m, b1, n) == true
+	)
+{
+	n
+		= Generate_p(sz);
+	Generate_b_m(n, b1, m);
+}
+cout <<
+“n =
+”
+;
+n.output();
+cout <<
+“
+\
+n
+”
+;
+x
+= BigNumber(1);
+x
+= x.Assign(1);
+y
+= BigNumber(1);
+y
+= y.Assign(1);
+point* p = new point
+;
+make_point(p, x, y, false);
+do {
+	a
+		= BigNumber(3);
+	a
+		= a.Random_Fill_Standard(997);
+	b
+		= (p
+			->y
+			*
+			p
+			->y
+			–
+			p
+			->x
+			*
+			p
+			->x
+			*
+			p
+			->x
+			–
+			a
+			*
+			p
+			->x)
+		% n;
+} while (GCD(n, a
+	*
+	a
+	* a
+	* 4
+	+
+	b
+	* b
+	* 27) != tmp);
+elliptic_curve* curve = new elliptic_curve
+;
+make_curve(curve, a, b, n);
+t1 = GetTickCount();
+BigNumber first = ECF_1(n, 1000000000, arr, p, curve);
+first.output();
+cout <<
+“
+\
+n
+”
+;
+t2 = GetTickCount();
+cout <<
+“TIME =
+” << t2
+– t1 << endl;
+cout <<
+“Continue ? 1 ? Or press any other button to end
+\
+n
+”
+;
+int answer;
+cin >> answer;
+if (answer == 1) {
+	t3 = GetTickCount();
+	ECF_2(first, curve).output();
+	cout <<
+		“
+		\
+		n
+		”
+		;
+	t4 = GetTickCount();
+	cout <<
+		“TIME =
+		” << (t4
+			– t3) + (t2
+				– t1) << endl;
+}
+system(
+	“pause
+	”);
+return 0;
+}
